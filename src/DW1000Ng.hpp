@@ -61,6 +61,7 @@ namespace DW1000Ng {
 	@param[in] irq The interrupt line/pin that connects the Arduino.
 	@param[in] rst The reset line/pin for hard resets of ICs that connect to the Arduino. Value 0xff means soft reset.
 	*/
+
 	void initialize(uint8_t ss, uint8_t irq, uint8_t rst = 0xff, SPIClass&spi = SPI);
 
 	/** 
@@ -642,3 +643,13 @@ namespace DW1000Ng {
     void getPrettyBytes(byte cmd, uint16_t offset, char msgBuffer[], uint16_t n);
 	#endif
 };
+namespace DW1000Ng {
+
+class DW1000Class {
+public:
+    static void newTransmit();
+    static void setData(uint8_t* data, uint16_t size);
+    static void setTxTimestamp(uint64_t timestamp);
+};
+
+} // namespace DW1000Ng
