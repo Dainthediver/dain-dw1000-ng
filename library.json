@@ -5,5 +5,5 @@
   "description": "Fork of DW1000Ng with implementations for ESP32 UWB boards",
   "frameworks": ["arduino"],
   "platforms": ["espressif32"],
-  "srcDir": "src"
+  "srcDir": "lib/dain-dw1000-ng/src"
 }
