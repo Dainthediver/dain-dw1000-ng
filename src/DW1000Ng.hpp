@@ -316,6 +316,25 @@ namespace DW1000Ng {
 	*/
 	void setAntennaDelay(uint16_t value);
 
+    
+    
+    // Writes a byte array to a specified DW1000 register
+    // @param reg The register address to write to
+    // @param subAddress The sub-address (or NO_SUB for none)
+    // @param data The byte array to write
+    // @param len The length of the data array
+    void writeBytes(uint8_t reg, uint8_t subAddress, byte data[], uint16_t len);
+    
+    // Converts a 64-bit value to a byte array
+    // @param data The output byte array
+    // @param val The 64-bit value to convert
+    // @param n The number of bytes to write
+    void writeValueToBytes(byte data[], uint64_t val, uint8_t n);
+
+    // Sets the transmit timestamp for the DW1000 module
+    // @param timestamp The 40-bit timestamp (in UWB time units) to schedule transmission
+    void setTxTimestamp(uint64_t timestamp);
+
 	#if defined(__AVR__)
 		/**
 		Sets both tx and rx antenna delay value, and saves it in the EEPROM for future use
@@ -513,7 +532,16 @@ namespace DW1000Ng {
 	@param [in] mode IMMEDIATE or DELAYED transmission
 	*/
 	void startTransmit(TransmitMode mode = TransmitMode::IMMEDIATE);
-		
+	/*GROK*/
+	
+	 // Sets the transmit data for the DW1000 module
+    // @param data The byte array containing the data to transmit
+    // @param n The length of the data array
+    void setData(byte data[], uint16_t n);
+    
+    // Prepares the DW1000 for a new transmission
+    void newTransmit();
+
 	/**
 	Gets the temperature inside the DW1000 Device
 

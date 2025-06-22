@@ -106,6 +106,7 @@ namespace DW1000Ng {
 		uint16_t		_antennaTxDelay = 0;
 		uint16_t		_antennaRxDelay = 0;
 
+		
 		/* ############################# PRIVATE METHODS ################################### */
 		
 		/*
@@ -122,28 +123,72 @@ namespace DW1000Ng {
 		* 		the register).
 		*/
 		// TODO offset really bigger than byte?
-		void _writeBytesToRegister(byte cmd, uint16_t offset, byte data[], uint16_t data_size) {
-			byte header[3];
-			uint8_t headerLen = 1;
-			
-			// TODO proper error handling: address out of bounds
-			// build SPI header
-			if(offset == NO_SUB) {
-				header[0] = WRITE | cmd;
-			} else {
-				header[0] = WRITE_SUB | cmd;
-				if(offset < 128) {
-					header[1] = (byte)offset;
-					headerLen++;
-				} else {
-					header[1] = RW_SUB_EXT | (byte)offset;
-					header[2] = (byte)(offset >> 7);
-					headerLen += 2;
-				}
+		
+		void writeBytes(uint8_t reg, uint8_t subAddress, byte data[], uint16_t len) {
+		// Prepare SPI transaction buffer
+		byte header[3];
+		uint8_t headerLen = 1;
+		
+		// Set register address (7 bits) and write flag (bit 7 = 0)
+		header[0] = reg & 0x7F;
+		
+		// Add sub-address if provided
+		if (subAddress != NO_SUB) {
+			header[0] |= 0x80; // Set sub-address bit
+			header[1] = subAddress;
+			headerLen = 2;
+			if (subAddress > 0x7F) {
+				header[1] = (subAddress >> 7) | 0x80;
+				header[2] = subAddress & 0x7F;
+				headerLen = 3;
 			}
-			
-			SPIporting::writeToSPI(_ss, headerLen, header, data_size, data);
 		}
+		
+		// Begin SPI transaction
+		digitalWrite(_ss, LOW);
+
+		// Write header
+		for (uint8_t i = 0; i < headerLen; i++) {
+			SPI.transfer(header[i]);
+		}
+		
+		// Write data
+		for (uint16_t i = 0; i < len; i++) {
+			SPI.transfer(data[i]);
+		}
+		
+		// End SPI transaction
+		digitalWrite(_ss, HIGH);
+		}
+		
+		void _writeBytesToRegister(uint8_t reg, uint8_t subAddress, byte data[], uint16_t len) {
+		byte header[3];
+		uint8_t headerLen = 1;
+		header[0] = reg & 0x7F;
+		if (subAddress != NO_SUB) {
+			header[0] |= 0x80;
+			header[1] = subAddress;
+			headerLen = 2;
+			if (subAddress > 0x7F) {
+				header[1] = (subAddress >> 7) | 0x80;
+				header[2] = subAddress & 0x7F;
+				headerLen = 3;
+			}
+		}
+		digitalWrite(_ss, LOW);
+		for (uint8_t i = 0; i < headerLen; i++) {
+			SPI.transfer(header[i]);
+		}
+		for (uint16_t i = 0; i < len; i++) {
+			SPI.transfer(data[i]);
+		}
+		digitalWrite(_ss, HIGH);
+		}
+
+		void _writeTransmitFrameControlRegister() {
+            _writeBytesToRegister(TX_FCTRL, NO_SUB, _txfctrl, LEN_TX_FCTRL);
+        }
+
 
 		/*
 		* Write Value in Hex or Int format to the DW1000. Single Value can be written to registers via sub-addressing.
@@ -819,12 +864,8 @@ namespace DW1000Ng {
 		}
 
 		void _writeChannelControlRegister() {
-			_writeBytesToRegister(CHAN_CTRL, NO_SUB, _chanctrl, LEN_CHAN_CTRL);
-		}
-
-		void _writeTransmitFrameControlRegister() {
-			_writeBytesToRegister(TX_FCTRL, NO_SUB, _txfctrl, LEN_TX_FCTRL);
-		}
+			_writeBytesToRegister(CHAN_CTRL, NO_SUB, _chanctrl, LEN_CHAN_CTRL);		}
+	
 
 		void _writeSystemEventMaskRegister() {
 			_writeBytesToRegister(SYS_MASK, NO_SUB, _sysmask, LEN_SYS_MASK);
@@ -915,6 +956,44 @@ namespace DW1000Ng {
 			}
 			_dataRate = data_rate;
 		}
+
+		void setData(byte data[], uint16_t n) {
+				// Add 2 bytes for CRC if frame check is enabled
+				if (_frameCheck) {
+					n += 2;
+				}
+				// Check frame length limits
+				if (n > LEN_EXT_UWB_FRAMES || (n > LEN_UWB_FRAMES && !_extendedFrameLength)) {
+					return; // Frame size exceeds limit
+				}
+				// Write data to TX_BUFFER register
+				_writeBytesToRegister(TX_BUFFER, NO_SUB, data, n);
+				
+				// Update transmit frame control with data length
+				_txfctrl[0] = (byte)(n & 0xFF);
+				_txfctrl[1] &= 0xE0;
+				_txfctrl[1] |= (byte)((n >> 8) & 0x03);
+				_writeTransmitFrameControlRegister();
+			}
+
+		void newTransmit() {
+        // Clear SYS_CTRL register to prepare for new transmission
+        memset(_sysctrl, 0, LEN_SYS_CTRL);
+        _writeBytesToRegister(SYS_CTRL, NO_SUB, _sysctrl, LEN_SYS_CTRL);
+    }
+
+    void startTransmit(TransmitMode mode) {
+        // Configure SYS_CTRL for transmission
+        DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, SFCST_BIT, !_frameCheck);
+        if (mode == TransmitMode::DELAYED) {
+            DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, TXDLYS_BIT, true);
+        }
+        if (_wait4resp) {
+            DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, WAIT4RESP_BIT, true);
+        }
+        DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, TXSTRT_BIT, true);
+        _writeBytesToRegister(SYS_CTRL, NO_SUB, _sysctrl, LEN_SYS_CTRL);
+    }
 
 		void _setPulseFrequency(PulseFrequency frequency) {
 			byte freq = static_cast<byte>(frequency);
@@ -1241,6 +1320,21 @@ namespace DW1000Ng {
 			/* Clear the register */
 			_writeValueToRegister(AON, AON_CTRL_SUB, 0x00, LEN_AON_CTRL);
 		}
+	
+
+void writeValueToBytes(byte data[], uint64_t val, uint8_t n) {
+    // Convert 64-bit value to byte array, LSB first
+    for (uint8_t i = 0; i < n; i++) {
+        data[i] = (val >> (i * 8)) & 0xFF;
+    }
+}
+
+void setTxTimestamp(uint64_t timestamp) {
+    byte tsBytes[5];
+    writeValueToBytes(tsBytes, timestamp, 5);
+    writeBytes(TX_TIME, NO_SUB, tsBytes, 5);
+}
+
 	}
 
 	/* ####################### PUBLIC ###################### */
@@ -1767,15 +1861,15 @@ namespace DW1000Ng {
 	}
 
 	void startTransmit(TransmitMode mode) {
-		memset(_sysctrl, 0, LEN_SYS_CTRL);
-		DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, SFCST_BIT, !_frameCheck);
-		if(mode == TransmitMode::DELAYED)
-			DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, TXDLYS_BIT, true);
-		if(_wait4resp)
-			DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, WAIT4RESP_BIT, true);
-
-		DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, TXSTRT_BIT, true);
-		_writeBytesToRegister(SYS_CTRL, NO_SUB, _sysctrl, LEN_SYS_CTRL);
+    DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, SFCST_BIT, !_frameCheck);
+    if (mode == TransmitMode::DELAYED) {
+        DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, TXDLYS_BIT, true);
+    }
+    if (_wait4resp) {
+        DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, WAIT4RESP_BIT, true);
+    }
+    DW1000NgUtils::setBit(_sysctrl, LEN_SYS_CTRL, TXSTRT_BIT, true);
+    _writeBytesToRegister(SYS_CTRL, NO_SUB, _sysctrl, LEN_SYS_CTRL);
 	}
 
 	void setInterruptPolarity(boolean val) {
@@ -2075,6 +2169,8 @@ namespace DW1000Ng {
 		}
 		return estFpPwr;
 	}
+	
+
 
 	float getReceivePower() {
 		byte     cirPwrBytes[LEN_CIR_PWR];

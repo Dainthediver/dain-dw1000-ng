@@ -27,7 +27,7 @@
 #include <Arduino.h>
 
 // no sub-address for register write
-constexpr uint16_t NO_SUB = 0xFF;
+constexpr uint16_t NO_SUB = 0x00; //GROK CHANGE FROM 0xFF;
 
 // device id register
 constexpr uint16_t DEV_ID = 0x00;
