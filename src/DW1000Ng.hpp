@@ -53,6 +53,12 @@
 #include "DW1000NgCompileOptions.hpp"
 
 namespace DW1000Ng {
+	/*GROK*/
+	
+		void newTransmit();
+		void setData(uint8_t* data, uint16_t size);
+		void setTxTimestamp(uint64_t timestamp);
+
 	/** 
 	Initiates and starts a sessions with a DW1000. If rst is not set or value 0xff, a soft resets (i.e. command
 	triggered) are used and it is assumed that no reset line is wired.
@@ -643,13 +649,3 @@ namespace DW1000Ng {
     void getPrettyBytes(byte cmd, uint16_t offset, char msgBuffer[], uint16_t n);
 	#endif
 };
-namespace DW1000Ng {
-
-class DW1000Class {
-public:
-    static void newTransmit();
-    static void setData(uint8_t* data, uint16_t size);
-    static void setTxTimestamp(uint64_t timestamp);
-};
-
-} // namespace DW1000Ng
